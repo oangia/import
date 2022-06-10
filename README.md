@@ -1,8 +1,7 @@
 ### API
 #### Add database
-```
-POST: {url}/wp-josn/ezimport/v1/data
-```
+POST `{url}/wp-josn/ezimport/v1/data`
+
 Params:
 ```
 {
@@ -16,6 +15,4 @@ Params:
 }
 ```
 #### Get last id
-```
-GET: {url}/wp-json/ezimport/v1/get_last_id/{table}
-```
+GET `{url}/wp-json/ezimport/v1/get_last_id/{table}`
