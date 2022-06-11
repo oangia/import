@@ -1,4 +1,18 @@
 ### API
+#### Add category, tag
+POST `{url}/wp-josn/ezimport/v1/terms`
+
+Params:
+```
+{
+    "type": "category", // category , post_tag
+    "values": [
+        "Cate 2",
+        "Cate 21"
+    ]
+}
+```
+
 #### Add database
 POST `{url}/wp-josn/ezimport/v1/data`
 
