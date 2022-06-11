@@ -9,10 +9,6 @@
  * License: GPLv2 or later
  */
 
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-
 add_action( 'rest_api_init', function() {
   register_rest_route( 'ezimport/v1', '/data', [
     'methods' => 'POST',
@@ -63,30 +59,81 @@ function add_data( $params ) {
   	return "";
 }
 
-function add_term( $params ) {
+function ez_insert($table, $fields, $values) {
 	$db_config = getMySqlConfig();
 	$mysqli = new mysqli($db_config['db_host'],$db_config['db_user'],$db_config['db_password'],$db_config['db_name']);
-	$content = trim(file_get_contents("php://input"));
-	$data = json_decode($content, true);
-	$table = $data['table'];
-	$fields = $data['fields'];
-	$values = [];
-	foreach ($data['values'] as $value) {
-		$values[] = '(' . $value . ')';
-	}
-	$values = implode(',', $values) . ';';
-	
 	$sql = "INSERT INTO `" . $db_config['table_prefix'] . $table . "` (" . $fields . ")
 	VALUES " . $values;
 
 	if ($mysqli->query($sql) === TRUE) {
-	  	echo "New record created successfully";
+	  	$last_id = $mysqli->insert_id;
+		$mysqli->close();
+		return $last_id;
 	} else {
 		echo $sql. "<br />";
 	  	echo "Error: " . $mysqli->error;
+	  	return false;
 	}
+}
+
+function ez_exec($sql) {
+	$db_config = getMySqlConfig();
+	$mysqli = new mysqli($db_config['db_host'],$db_config['db_user'],$db_config['db_password'],$db_config['db_name']);
+	$result = $mysqli->query($sql);
+	if (! $result) return false;
+	$arr = [];
+	while ($row = $result -> fetch_assoc()) {
+		$arr[] = $row;
+	}
+	$result -> free_result();
 	$mysqli->close();
-  	return "hello";
+	return $arr;
+}
+
+function ez_select() {
+	$db_config = getMySqlConfig();
+	$mysqli = new mysqli($db_config['db_host'],$db_config['db_user'],$db_config['db_password'],$db_config['db_name']);
+	$result = $mysqli->query("SELECT ID FROM `" . $db_config['table_prefix'] . "posts` ORDER BY id DESC");
+	if (! $result) return false;
+	$arr = [];
+	while ($row = $result -> fetch_assoc()) {
+		$arr[] = $row;
+	}
+	$result -> free_result();
+	$mysqli->close();
+	return $arr;
+}
+
+function add_term( $params ) {
+	$db_config = getMySqlConfig();
+	$content = trim(file_get_contents("php://input"));
+	$data = json_decode($content, true);
+	$type = $data['type'];
+	$values = $data['values'];
+	$search = [];
+	foreach ($values as $value) {
+		$search[] = '"'. $value . '"';
+	}
+	$search = '(' . implode(',', $search) . ')';
+
+	$sql = "SELECT ".$db_config['table_prefix']."terms.term_id, ".$db_config['table_prefix']."terms.name, ".$db_config['table_prefix']."term_taxonomy.taxonomy FROM `".$db_config['table_prefix']."terms` LEFT JOIN ".$db_config['table_prefix']."term_taxonomy ON ".$db_config['table_prefix']."terms.term_id = ".$db_config['table_prefix']."term_taxonomy.term_id WHERE taxonomy = '$type' AND name IN " . $search;
+
+	$result = ez_exec($sql);
+
+	$terms = [];
+	foreach ($result as $item) {
+		$terms[$item["name"]] = intval($item["term_id"]);
+	}
+	foreach ($values as $value) {
+		if (!isset($terms[$value])) {
+			// insert here
+			$id = ez_insert('terms', 'name,slug,term_group', '("'.$value.'", "'.sanitize_title($value).'", 0)');
+			ez_insert('term_taxonomy', 'term_id,taxonomy', '('.$id.', "'.$type.'")');
+			$terms[$value] = intval($id);
+		}
+	}
+
+  	return $terms;
 }
 
 function get_last_id( $params ) {
@@ -106,6 +153,7 @@ function getLastId($table) {
 	$row = $result -> fetch_assoc();
 	$result -> free_result();
 	$mysqli->close();
+	print_r($row);
 	return intval($row['ID']);
 }
 
