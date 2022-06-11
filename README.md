@@ -36,5 +36,16 @@ Params:
     ]
 }
 ```
+
+Response:
+```
+New record created successfully
+```
+
 #### Get last id
 GET `{domain}/wp-json/ezimport/v1/get_last_id/{table}`
+
+Response:
+```
+95
+```
