@@ -1,6 +1,6 @@
 ### API
 #### Add category, tag
-POST `{url}/wp-josn/ezimport/v1/terms`
+POST `{url}/wp-json/ezimport/v1/terms`
 
 Params:
 ```
@@ -14,7 +14,7 @@ Params:
 ```
 
 #### Add database
-POST `{url}/wp-josn/ezimport/v1/data`
+POST `{url}/wp-json/ezimport/v1/data`
 
 Params:
 ```
