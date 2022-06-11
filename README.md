@@ -1,6 +1,6 @@
 ### API
 #### Add category, tag
-POST `{url}/wp-json/ezimport/v1/terms`
+POST `{domain}/wp-json/ezimport/v1/terms`
 
 Params:
 ```
@@ -14,7 +14,7 @@ Params:
 ```
 
 #### Add database
-POST `{url}/wp-json/ezimport/v1/data`
+POST `{domain}/wp-json/ezimport/v1/data`
 
 Params:
 ```
@@ -29,4 +29,4 @@ Params:
 }
 ```
 #### Get last id
-GET `{url}/wp-json/ezimport/v1/get_last_id/{table}`
+GET `{domain}/wp-json/ezimport/v1/get_last_id/{table}`
