@@ -13,6 +13,14 @@ Params:
 }
 ```
 
+Response:
+```
+{
+    "Cate 2": 4,
+    "Cate 21": 5
+}
+```
+
 #### Add database
 POST `{domain}/wp-json/ezimport/v1/data`
 
