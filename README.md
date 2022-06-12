@@ -1,6 +1,28 @@
 ### API
+#### Add category, tag
+POST `{domain}/wp-json/ezimport/v1/terms`
+
+Params:
+```
+{
+    "type": "category", // category , post_tag
+    "values": [
+        "Cate 2",
+        "Cate 21"
+    ]
+}
+```
+
+Response:
+```
+{
+    "Cate 2": 4,
+    "Cate 21": 5
+}
+```
+
 #### Add database
-POST `{url}/wp-josn/ezimport/v1/data`
+POST `{domain}/wp-json/ezimport/v1/data`
 
 Params:
 ```
@@ -14,5 +36,16 @@ Params:
     ]
 }
 ```
+
+Response:
+```
+New record created successfully
+```
+
 #### Get last id
-GET `{url}/wp-json/ezimport/v1/get_last_id/{table}`
+GET `{domain}/wp-json/ezimport/v1/get_last_id/{table}`
+
+Response:
+```
+95
+```
