@@ -9,168 +9,238 @@
  * License: GPLv2 or later
  */
 
-add_action( 'rest_api_init', function() {
-  register_rest_route( 'ezimport/v1', '/data', [
-    'methods' => 'POST',
-    'callback' => 'add_data',
-    'permission_callback' => '__return_true',
-  ] );
-} );
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
 
-add_action( 'rest_api_init', function() {
-  register_rest_route( 'ezimport/v1', '/terms', [
-    'methods' => 'POST',
-    'callback' => 'add_term',
-    'permission_callback' => '__return_true',
-  ] );
-} );
+// api route
+$route = new Route();
 
-add_action( 'rest_api_init', function() {
-  register_rest_route( 'ezimport/v1', '/get_last_id/(?P<table>[a-zA-Z0-9-]+)', [
-    'methods' => 'GET',
-    'callback' => 'get_last_id',
-    'permission_callback' => '__return_true',
-  ] );
-} );
-// Get single project
-function add_data( $params ) {
-	$db_config = getMySqlConfig();
-	$mysqli = new mysqli($db_config['db_host'],$db_config['db_user'],$db_config['db_password'],$db_config['db_name']);
+$route->namespace('ezimport/v1');
+$route->post('data', 									'add_data');
+$route->get( 'get_last_id/(?P<table>[a-zA-Z0-9-]+)', 	'get_last_id');
+$route->post('terms', 									'add_term');
+
+// controller
+function add_data($params)
+{
 	$content = trim(file_get_contents("php://input"));
 	$data = json_decode($content, true);
+
 	$table = $data['table'];
 	$fields = $data['fields'];
-	$values = [];
-	foreach ($data['values'] as $value) {
-		$values[] = '(' . $value . ')';
-	}
-	$values = implode(',', $values) . ';';
-	
-	$sql = "INSERT INTO `" . $db_config['table_prefix'] . $table . "` (" . $fields . ")
-	VALUES " . $values;
+	$values = $data['values'];
 
-	if ($mysqli->query($sql) === TRUE) {
-	  	echo "New record created successfully";
-	} else {
-		echo $sql. "<br />";
-	  	echo "Error: " . $mysqli->error;
-	}
-	$mysqli->close();
-  	return "";
+	$db = new Database();
+	$db->connect();
+	$success = $db->insert($table, $fields, $values);
+	$db->disconnect();
+
+	if (! $success) return 'Insert fail';
+
+	return 'New record created successfully';
 }
 
-function ez_insert($table, $fields, $values) {
-	$db_config = getMySqlConfig();
-	$mysqli = new mysqli($db_config['db_host'],$db_config['db_user'],$db_config['db_password'],$db_config['db_name']);
-	$sql = "INSERT INTO `" . $db_config['table_prefix'] . $table . "` (" . $fields . ")
-	VALUES " . $values;
-
-	if ($mysqli->query($sql) === TRUE) {
-	  	$last_id = $mysqli->insert_id;
-		$mysqli->close();
-		return $last_id;
-	} else {
-		echo $sql. "<br />";
-	  	echo "Error: " . $mysqli->error;
-	  	return false;
-	}
-}
-
-function ez_exec($sql) {
-	$db_config = getMySqlConfig();
-	$mysqli = new mysqli($db_config['db_host'],$db_config['db_user'],$db_config['db_password'],$db_config['db_name']);
-	$result = $mysqli->query($sql);
-	if (! $result) return false;
-	$arr = [];
-	while ($row = $result -> fetch_assoc()) {
-		$arr[] = $row;
-	}
-	$result -> free_result();
-	$mysqli->close();
-	return $arr;
-}
-
-function ez_select() {
-	$db_config = getMySqlConfig();
-	$mysqli = new mysqli($db_config['db_host'],$db_config['db_user'],$db_config['db_password'],$db_config['db_name']);
-	$result = $mysqli->query("SELECT ID FROM `" . $db_config['table_prefix'] . "posts` ORDER BY id DESC");
-	if (! $result) return false;
-	$arr = [];
-	while ($row = $result -> fetch_assoc()) {
-		$arr[] = $row;
-	}
-	$result -> free_result();
-	$mysqli->close();
-	return $arr;
+function get_last_id($params)
+{
+	$db = new Database();
+	$db->connect();
+	$lastId = $db->getLastId($params["table"]);
+	$db->disconnect();
+	return $lastId;
 }
 
 function add_term( $params ) {
-	$db_config = getMySqlConfig();
 	$content = trim(file_get_contents("php://input"));
 	$data = json_decode($content, true);
+
 	$type = $data['type'];
 	$values = $data['values'];
+
+	$db = new Database();
+	$db->connect();
 	$search = [];
 	foreach ($values as $value) {
-		$search[] = '"'. $value . '"';
+		$search[] = '"' . $value . '"';
 	}
-	$search = '(' . implode(',', $search) . ')';
+	$search = implode(',', $search);
 
-	$sql = "SELECT ".$db_config['table_prefix']."terms.term_id, ".$db_config['table_prefix']."terms.name, ".$db_config['table_prefix']."term_taxonomy.taxonomy FROM `".$db_config['table_prefix']."terms` LEFT JOIN ".$db_config['table_prefix']."term_taxonomy ON ".$db_config['table_prefix']."terms.term_id = ".$db_config['table_prefix']."term_taxonomy.term_id WHERE taxonomy = '$type' AND name IN " . $search;
+	$sql = "SELECT " . $db->table_prefix . "terms.term_id, " . $db->table_prefix . "terms.name, " . $db->table_prefix . "term_taxonomy.taxonomy FROM `" . $db->table_prefix . "terms` LEFT JOIN " . $db->table_prefix . "term_taxonomy ON " . $db->table_prefix . "terms.term_id = " . $db->table_prefix . "term_taxonomy.term_id WHERE taxonomy = '$type' AND name IN (" . $search . ")";
 
-	$result = ez_exec($sql);
+	$result = $db->exec($sql);
 
 	$terms = [];
 	foreach ($result as $item) {
 		$terms[$item["name"]] = intval($item["term_id"]);
 	}
+
+	//
 	foreach ($values as $value) {
-		if (!isset($terms[$value])) {
+		if (! isset($terms[$value])) {
 			// insert here
-			$id = ez_insert('terms', 'name,slug,term_group', '("'.$value.'", "'.sanitize_title($value).'", 0)');
-			ez_insert('term_taxonomy', 'term_id,taxonomy', '('.$id.', "'.$type.'")');
+			$id = $db->insert('terms', 'name,slug,term_group', ['"'. $value . '", "' . sanitize_title($value) . '", 0']);
+			$db->insert('term_taxonomy', 'term_id,taxonomy', [$id . ', "' . $type . '"']);
 			$terms[$value] = intval($id);
 		}
 	}
+	$db->disconnect();
 
   	return $terms;
 }
 
-function get_last_id( $params ) {
-	return getLastId($params["table"]);
-}
-
+// show post gallery from outter source
 add_filter( 'wp_get_attachment_url', function (string $url, int $attachment_id) {
 	$url = get_the_guid( $attachment_id );
 	return $url;
 }, 10, 2);
 
-function getLastId($table) {
-    $db_config = getMySqlConfig();
-	$mysqli = new mysqli($db_config['db_host'],$db_config['db_user'],$db_config['db_password'],$db_config['db_name']);
-	$result = $mysqli->query("SELECT ID FROM `" . $db_config['table_prefix'] . "$table` ORDER BY id DESC LIMIT 1");
-	if (! $result) return 0;
-	$row = $result -> fetch_assoc();
-	$result -> free_result();
-	$mysqli->close();
-	print_r($row);
-	return intval($row['ID']);
+class Route
+{
+	private $namespace;
+
+	public function namespace($namespace)
+	{
+		$this->namespace = $namespace;
+	}
+
+	public function post($name, $controller)
+	{
+		add_action( 'rest_api_init', function() use ($name, $controller) {
+		  register_rest_route($this->namespace, '/' . $name, [
+		    'methods' => 'POST',
+		    'callback' => $controller,
+		    'permission_callback' => '__return_true',
+		  ] );
+		} );
+	}
+
+	public function get($name, $controller)
+	{
+		add_action( 'rest_api_init', function() use ($name, $controller) {
+		  register_rest_route($this->namespace, '/' . $name, [
+		    'methods' => 'GET',
+		    'callback' => $controller,
+		    'permission_callback' => '__return_true',
+		  ] );
+		} );
+	}
 }
 
-function getMySqlConfig() {
-	$root = ABSPATH;
-	$config = file_get_contents($root . '/wp-config.php');
-	$db_host = get_string_between($config, "'DB_HOST', '", "'");
-	$db_user = get_string_between($config, "'DB_USER', '", "'");
-	$db_password = get_string_between($config, "'DB_PASSWORD', '", "'");
-	$db_name = get_string_between($config, "'DB_NAME', '", "'");
-	$table_prefix = get_string_between($config, "table_prefix = '", "'");
-	return compact('db_host', 'db_user', 'db_password', 'db_name', 'table_prefix');
-}
+class Database 
+{
+	private $db_host;
+	private $db_name;
+	private $db_user;
+	private $db_password;
+	public $table_prefix;
+	private $mysqli;
 
-function get_string_between($str, $str1, $str2, $deep = 1) {
-    $str = explode($str1, $str);
-    $str = explode($str2, $str[$deep]);
-    return $str[0];
+	function __construct()
+	{
+		$config = $this->getMySqlConfig();
+		$this->db_host = $config['db_host'];
+		$this->db_name = $config['db_name'];
+		$this->db_user = $config['db_user'];
+		$this->db_password = $config['db_password'];
+		$this->table_prefix = $config['table_prefix'];
+
+	}
+
+	public function connect()
+	{
+		$this->mysqli = new mysqli($this->db_host, $this->db_user, $this->db_password, $this->db_name);
+	}
+
+	public function disconnect()
+	{
+		$this->mysqli->close();
+	}
+
+	public function exec($sql)
+	{
+		$result = $this->mysqli->query($sql);
+		if (! $result) return [];
+		$arr = [];
+		while ($row = $result->fetch_assoc()) {
+			$arr[] = $row;
+		}
+		$result->free_result();
+		return $arr;
+	}
+
+	public function select($fields, )
+	{
+		$result = $mysqli->query("SELECT ID FROM `" . $db_config['table_prefix'] . "posts` ORDER BY id DESC");
+		if (! $result) return [];
+		$arr = [];
+		while ($row = $result -> fetch_assoc()) {
+			$arr[] = $row;
+		}
+		$result -> free_result();
+		$mysqli->close();
+		return $arr;
+	}
+
+	public function insert($table, $fields, $values)
+	{
+		$valuesStr = $this->valuesToString($values);
+
+		$sql = "INSERT INTO `" . $this->table_prefix . $table . "` (" . $fields . ")
+			VALUES " . $valuesStr;
+
+		if ($this->mysqli->query($sql) === TRUE) {
+		  	$last_id = $this->mysqli->insert_id;
+			return $last_id;
+		}
+
+		echo $sql. "<br />";
+	  	echo "Error: " . $this->mysqli->error;
+	  	return false;
+	}
+
+	public function update()
+	{
+
+	}
+
+	public function delete()
+	{
+
+	}
+
+	public function getLastId($table, $id_name = "ID")
+	{
+		$result = $this->mysqli->query('SELECT ' . $id_name . ' FROM `' . $this->table_prefix . $table . '` ORDER BY id DESC LIMIT 1');
+		if (! $result) return 0;
+		$row = $result->fetch_assoc();
+		$result->free_result();
+		return intval($row[$id_name]);
+	}
+
+	public function valuesToString($values)
+	{
+		$valueStr = [];
+		foreach ($values as $value) {
+			$valueStr[] = '(' . $value . ')';
+		}
+		return implode(',', $valueStr) . ';';
+	}
+
+	private function getMySqlConfig()
+	{
+		$config = file_get_contents(ABSPATH . '/wp-config.php');
+		$db_host = $this->get_string_between($config, "'DB_HOST', '", "'");
+		$db_user = $this->get_string_between($config, "'DB_USER', '", "'");
+		$db_password = $this->get_string_between($config, "'DB_PASSWORD', '", "'");
+		$db_name = $this->get_string_between($config, "'DB_NAME', '", "'");
+		$table_prefix = $this->get_string_between($config, "table_prefix = '", "'");
+		return compact('db_host', 'db_user', 'db_password', 'db_name', 'table_prefix');
+	}
+
+	private function get_string_between($str, $str1, $str2, $deep = 1) {
+	    $str = explode($str1, $str);
+	    $str = explode($str2, $str[$deep]);
+	    return $str[0];
+	}
 }
 ?>
